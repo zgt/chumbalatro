@@ -1,0 +1,13 @@
+{
+    "id": "CHUMBA",
+    "name": "Chumbalatro",
+    "author": ["chumba"],
+    "description": "Adding new jokers for fun",
+    "prefix": "chmb",
+    "main_file": "Chumbalatro.lua",
+    "badge_colour": "c7638f",
+    "dependencies": [
+        "Steamodded (>=1.0.0~ALPHA-1225a)"
+    ],
+    "version": "1.0.0"
+}
