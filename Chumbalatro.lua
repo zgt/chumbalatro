@@ -232,8 +232,9 @@ SMODS.Joker {
             end
             if #jokers > 0 then 
                 G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
-                    card_eval_status_text(context.blueprint_card or card, 'extra', nil, nil, nil, {message = 'Negative!'})
                     local chosen_joker = pseudorandom_element(jokers, pseudoseed('lucretia'))
+                    local messageText = chosen_joker.label .. ' Negative!'
+                    card_eval_status_text(context.blueprint_card or card, 'extra', nil, nil, nil, {message = messageText})
                     chosen_joker:set_edition('e_negative', true)
                     card:juice_up(0.3, 0.5)
                 return true end}))
