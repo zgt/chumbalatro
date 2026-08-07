@@ -16,15 +16,17 @@ SMODS.Joker {
     },
     blueprint_compat = true,
     config = { extra = {mult_gain = 1.1 } },
-    rarity = 1,
+    rarity = 3,
     atlas = 'Chumbalatro',
     pos = { x = 1, y = 0},
     cost = 5,
     loc_vars = function(self, info_queue, card)
+        local kc1 = G.GAME.current_round and G.GAME.current_round.kissing_card1 or { rank = "2" }
+        local kc2 = G.GAME.current_round and G.GAME.current_round.kissing_card2 or { rank = "7" }
         return {
             vars = {
-                localize(G.GAME.current_round.kissing_card1.rank, "ranks"),
-                localize(G.GAME.current_round.kissing_card2.rank, "ranks"),
+                localize(kc1.rank, "ranks"),
+                localize(kc2.rank, "ranks"),
                 card.ability.extra.mult_gain
             }
         }
@@ -68,7 +70,7 @@ SMODS.Joker {
     },
     blueprint_compat = true,
     config = { extra = {increase = 1.2} },
-    rarity = 1,
+    rarity = 3,
     atlas = 'Chumbalatro',
     pos = { x = 0, y = 0},
     cost = 5,
@@ -111,6 +113,7 @@ SMODS.Joker {
 	end,
     update = function(self, card, front)
 		if G.STAGE == G.STAGES.RUN then
+			local other_joker
 			for i = 1, #G.jokers.cards do
 				if G.jokers.cards[i] == card then
 					other_joker = G.jokers.cards[i + 1]
@@ -162,15 +165,16 @@ SMODS.Joker {
     },
     blueprint_compat = true,
     config = { extra = {odds = 4} },
-    rarity = 1,
+    rarity = 2,
     atlas = 'Chumbalatro',
     pos = { x = 2, y = 0},
     cost = 5,
     loc_vars = function(self, info_queue, card)
+        local numerator, denominator = SMODS.get_probability_vars(card, 1, card.ability.extra.odds, 'contagion')
         return {
             vars = {
-                (G.GAME.probabilities.normal or 1),
-                card.ability.extra.odds
+                numerator,
+                denominator
             }
         }
     end,
@@ -178,7 +182,7 @@ SMODS.Joker {
         if context.individual and context.cardarea == G.play and context.scoring_name == 'High Card' and #context.full_hand > 1 then
             local leftmost = context.scoring_hand[1]
             for i = 2, #context.full_hand do
-                if pseudorandom('contagion') < G.GAME.probabilities.normal / card.ability.extra.odds then
+                if SMODS.pseudorandom_probability(card, 'contagion', 1, card.ability.extra.odds) then
                     G.E_MANAGER:add_event(Event({trigger = 'after',delay = 0.1,func = function()
                         if context.full_hand[i] ~= leftmost then
                             copy_card(leftmost, context.full_hand[i])
@@ -206,16 +210,16 @@ SMODS.Joker {
         name = 'Lucretia',
         text = {
             "After defeating the {C:attention}boss blind,",
-            "converts random joker in your posession",
+            "converts random joker in your possession",
             "to {C:dark_edition}Negative"
         }
     },
     blueprint_compat = true,
     config = { extra = {} },
-    rarity = 1,
+    rarity = 4,
     atlas = 'Chumbalatro',
-    pos = { x = 0, y = 0},
-    cost = 5,
+    pos = { x = 4, y = 0},
+    cost = 20,
     loc_vars = function(self, info_queue, card)
         return {
             vars = {
@@ -243,11 +247,66 @@ SMODS.Joker {
     end
 }
 
+SMODS.Joker {
+    key = 'matryoshka',
+    loc_txt = {
+        name = 'Matryoshka',
+        text = {
+            "{X:mult,C:white} X#1# {} Mult",
+            "When {C:attention}sold{}, a smaller",
+            "doll pops out",
+            "{C:inactive}(#2# dolls inside)"
+        }
+    },
+    blueprint_compat = true,
+    config = { extra = { x_mult = 3, dolls = 4 } },
+    rarity = 3,
+    atlas = 'Chumbalatro',
+    pos = { x = 3, y = 0},
+    cost = 8,
+    loc_vars = function(self, info_queue, card)
+        return {
+            vars = {
+                card.ability.extra.x_mult,
+                card.ability.extra.dolls
+            }
+        }
+    end,
+    calculate = function(self, card, context)
+        if context.joker_main then
+            return {
+                xmult = card.ability.extra.x_mult
+            }
+        end
+        if context.selling_self and card.ability.extra.dolls > 0 then
+            -- Each doll is half as far above X1 as its parent, at half the cost.
+            local next_x = format_number(1 + (card.ability.extra.x_mult - 1) / 2, "%.4g")
+            local next_dolls = card.ability.extra.dolls - 1
+            local next_cost = math.max(1, math.floor((card.base_cost or self.cost) / 2))
+            G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+                local new_card = SMODS.add_card { key = 'j_chmb_matryoshka' }
+                if new_card then
+                    new_card.ability.extra.x_mult = next_x
+                    new_card.ability.extra.dolls = next_dolls
+                    new_card.base_cost = next_cost
+                    new_card:set_cost()
+                    new_card:juice_up(0.3, 0.5)
+                    card_eval_status_text(new_card, 'extra', nil, nil, nil, { message = 'Pop!', colour = G.C.RED })
+                end
+                return true
+            end}))
+        end
+    end
+}
+
+-- Big/to_big/to_number/is_number only exist when Talisman is installed;
+-- fall back to plain numbers without it.
 function format_number(number, str)
-	if math.abs(to_big(number)) >= to_big(1e300) then
+	local n = Big and to_number(to_big(number)) or number
+	if math.abs(n) >= 1e300 then
 		return number
 	end
-	return tonumber(str:format((Big and to_number(to_big(number)) or number)))
+	return tonumber(str:format(n))
 end
 
 function with_deck_effects(card, func)
@@ -265,11 +324,12 @@ function multiply_values(card, value)
     local key = card.config.center_key
     local ref_val = "ability"
     if key and card and ref_val then
-        tbl = deep_copy(card[ref_val])
+        local isnum = is_number or function(x) return type(x) == 'number' end
+        local tbl = deep_copy(card[ref_val])
         for k, v in pairs(tbl) do
-            if (type(tbl[k]) ~= "table") or is_number(tbl[k]) then
+            if (type(tbl[k]) ~= "table") or isnum(tbl[k]) then
                 if
-                    is_number(tbl[k])
+                    isnum(tbl[k])
                     and not (k == "perish_tally")
                     and not (k == "id")
                     and not (k == "colour")
@@ -279,13 +339,22 @@ function multiply_values(card, value)
                     and not (k == "qty")
                     and not (k == "x_mult" and v == 1 and not tbl.override_x_mult_check)
                     and not (k == "selected_d6_face")
-                then 
-                    tbl[k] = format_number(tbl[k] * value, "%.2g")
+                    and not (k == "card_limit")
+                    and not (k == "extra_slots_used")
+                    and not (k == "dolls")
+                then
+                    if k == "odds" then
+                        -- Denominator of a "1 in N" chance: divide so the
+                        -- probability improves; 1 in 1 is the best possible.
+                        tbl[k] = math.max(1, format_number(tbl[k] / value, "%.2g"))
+                    else
+                        tbl[k] = format_number(tbl[k] * value, "%.2g")
+                    end
                 end
             else
                 for _k, _v in pairs(tbl[k]) do
                     if
-                        is_number(tbl[k][_k])
+                        isnum(tbl[k][_k])
                         and not (_k == "id")
                         and not (k == "colour")
                         and not (_k == "suit_nominal")
@@ -294,8 +363,15 @@ function multiply_values(card, value)
                         and not (_k == "qty")
                         and not (k == "x_mult" and v == 1 and not tbl[k].override_x_mult_check)
                         and not (_k == "selected_d6_face")
+                        and not (_k == "card_limit")
+                        and not (_k == "extra_slots_used")
+                        and not (_k == "dolls")
                     then --Refer to above
-                        tbl[k][_k] = format_number(tbl[k][_k] * value, "%.2g")
+                        if _k == "odds" then
+                            tbl[k][_k] = math.max(1, format_number(tbl[k][_k] / value, "%.2g"))
+                        else
+                            tbl[k][_k] = format_number(tbl[k][_k] * value, "%.2g")
+                        end
                     end
                 end
             end
@@ -320,60 +396,33 @@ function deep_copy(obj, seen)
 	return res
 end
 
-local gigo = Game.init_game_object
-function Game:init_game_object()
-	local g = gigo(self)
-	g.current_round.kissing_card1 = { rank = "2"}
-    g.current_round.kissing_card2 = { rank = "7"}
-	return g
-end
-
-local rcc = reset_castle_card
--- This is a part 2 of the above thing, to make the custom G.GAME variable change every round.
-function reset_castle_card()
-    rcc()
-	-- The suit changes every round, so we use reset_game_globals to choose a suit.
-	G.GAME.current_round.kissing_card1 = { rank = "2"}
-    G.GAME.current_round.kissing_card2 = { rank = "7"}
-	local valid_castle_cards = {}
+-- Rerolls the kissing cards at run start and every round (SMODS calls this
+-- at Game:start_run and alongside reset_castle_card).
+SMODS.current_mod.reset_game_globals = function(run_start)
+	G.GAME.current_round.kissing_card1 = { rank = "2" }
+	G.GAME.current_round.kissing_card2 = { rank = "7" }
+	local valid_kissing_cards = {}
 	for _, v in ipairs(G.playing_cards) do
-		if v.ability.effect ~= 'Stone Card' then -- Abstracted enhancement check for jokers being able to give cards additional enhancements
-			valid_castle_cards[#valid_castle_cards + 1] = v
+		if v.ability.effect ~= 'Stone Card' then
+			valid_kissing_cards[#valid_kissing_cards + 1] = v
 		end
 	end
-	if valid_castle_cards[1] then
-        --Kissing Cards
-        local kissing_card_1 = pseudorandom_element(valid_castle_cards, pseudoseed("kiss1" .. G.GAME.round_resets.ante))
-        local kissing_card_2 = pseudorandom_element(valid_castle_cards, pseudoseed("kiss2" .. G.GAME.round_resets.ante))
-        if not G.GAME.current_round.kissing_card1 then
-			G.GAME.current_round.kissing_card1 = {}
+	if valid_kissing_cards[1] then
+		local kissing_card_1 = pseudorandom_element(valid_kissing_cards, pseudoseed("kiss1" .. G.GAME.round_resets.ante))
+		-- Only cards of a different rank are valid partners; if the whole deck
+		-- is one rank there is no second card and the defaults stay.
+		local partner_cards = {}
+		for _, v in ipairs(valid_kissing_cards) do
+			if v.base.value ~= kissing_card_1.base.value then
+				partner_cards[#partner_cards + 1] = v
+			end
 		end
-        if not G.GAME.current_round.kissing_card2 then
-			G.GAME.current_round.kissing_card2 = {}
+		if partner_cards[1] then
+			local kissing_card_2 = pseudorandom_element(partner_cards, pseudoseed("kiss2" .. G.GAME.round_resets.ante))
+			G.GAME.current_round.kissing_card1.rank = kissing_card_1.base.value
+			G.GAME.current_round.kissing_card1.id = kissing_card_1.base.id
+			G.GAME.current_round.kissing_card2.rank = kissing_card_2.base.value
+			G.GAME.current_round.kissing_card2.id = kissing_card_2.base.id
 		end
-        print(kissing_card_1.base.value)
-        print(kissing_card_2.base.value)
-        while kissing_card_1.base.value == kissing_card_2.base.value do
-            kissing_card_2 = pseudorandom_element(valid_castle_cards, pseudoseed("kiss2" .. G.GAME.round_resets.ante))
-            print(kissing_card_2.base.value)
-        end
-        G.GAME.current_round.kissing_card1.rank = kissing_card_1.base.value
-		G.GAME.current_round.kissing_card1.id = kissing_card_1.base.id
-
-        G.GAME.current_round.kissing_card2.rank = kissing_card_2.base.value
-		G.GAME.current_round.kissing_card2.id = kissing_card_2.base.id
-
 	end
 end
-
--- Back.apply_to_run Hook for decks
-local Backapply_to_runRef = Back.apply_to_run
-function Back.apply_to_run(self)
-	Backapply_to_runRef(self)
-	if self.effect.config.cry_no_edition_price then
-		G.GAME.modifiers.cry_no_edition_price = true
-	end
-end
-
---Game:update hook
-local upd = Game.update
