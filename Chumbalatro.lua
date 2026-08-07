@@ -119,7 +119,7 @@ SMODS.Joker {
 					other_joker = G.jokers.cards[i + 1]
 				end
 			end
-			if other_joker and other_joker ~= card then
+			if other_joker and other_joker ~= card and snowball_can_buff(other_joker) then
 				card.ability.blueprint_compat = "compatible"
 			else
 				card.ability.blueprint_compat = "incompatible"
@@ -131,7 +131,7 @@ SMODS.Joker {
 			local check = false
 			for i = 1, #G.jokers.cards do
 				if G.jokers.cards[i] == card then
-					if i < #G.jokers.cards then
+					if i < #G.jokers.cards and snowball_can_buff(G.jokers.cards[i + 1]) then
                         check = true
                         with_deck_effects(G.jokers.cards[i + 1], function(cards)
                             multiply_values(cards, card.ability.extra.increase)
@@ -219,6 +219,7 @@ SMODS.Joker {
     rarity = 4,
     atlas = 'Chumbalatro',
     pos = { x = 4, y = 0},
+    soul_pos = { x = 5, y = 1},
     cost = 20,
     loc_vars = function(self, info_queue, card)
         return {
@@ -299,6 +300,216 @@ SMODS.Joker {
     end
 }
 
+SMODS.Joker {
+    key = 'winter_palace',
+    loc_txt = {
+        name = 'Winter Palace',
+        text = {
+            "{C:chips}+#1#{} Chips",
+            "Snow piles up: gains {C:chips}+#2#{} Chips",
+            "at end of round"
+        }
+    },
+    blueprint_compat = true,
+    config = { extra = { chips = 0, chip_gain = 30 } },
+    rarity = 2,
+    atlas = 'Chumbalatro',
+    pos = { x = 5, y = 0},
+    cost = 6,
+    loc_vars = function(self, info_queue, card)
+        return {
+            vars = {
+                card.ability.extra.chips,
+                card.ability.extra.chip_gain
+            }
+        }
+    end,
+    calculate = function(self, card, context)
+        if context.joker_main and card.ability.extra.chips > 0 then
+            return {
+                chips = card.ability.extra.chips
+            }
+        end
+        if context.end_of_round and not context.repetition and not context.individual and not context.blueprint then
+            card.ability.extra.chips = card.ability.extra.chips + card.ability.extra.chip_gain
+            card_eval_status_text(card, 'extra', nil, nil, nil, { message = 'Snow piles up!', colour = G.C.CHIPS })
+        end
+    end
+}
+
+SMODS.Joker {
+    key = 'phone_a_friend',
+    loc_txt = {
+        name = 'Phone a Friend',
+        text = {
+            "{X:mult,C:white} X#1# {} Mult on the {C:attention}final hand",
+            "of the round, but only if the",
+            "Blind is not yet beaten"
+        }
+    },
+    blueprint_compat = true,
+    config = { extra = { x_mult = 4 } },
+    rarity = 2,
+    atlas = 'Chumbalatro',
+    pos = { x = 1, y = 1},
+    cost = 6,
+    loc_vars = function(self, info_queue, card)
+        return {
+            vars = {
+                card.ability.extra.x_mult
+            }
+        }
+    end,
+    calculate = function(self, card, context)
+        if context.joker_main
+            and G.GAME.current_round.hands_left == 0
+            and G.GAME.blind and G.GAME.blind.chips
+            and G.GAME.chips < G.GAME.blind.chips then
+            return {
+                xmult = card.ability.extra.x_mult
+            }
+        end
+    end
+}
+
+SMODS.Joker {
+    key = 'caterpillar',
+    loc_txt = {
+        name = 'Caterpillar',
+        text = {
+            "{C:mult}+#1#{} Mult",
+            "{C:green,E:1,S:1.1}#2# in #3#{} chance at end of round",
+            "to metamorphose into a {C:attention}Butterfly"
+        }
+    },
+    blueprint_compat = true,
+    config = { extra = { mult = 4, odds = 4 } },
+    rarity = 1,
+    atlas = 'Chumbalatro',
+    pos = { x = 2, y = 1},
+    cost = 4,
+    loc_vars = function(self, info_queue, card)
+        info_queue[#info_queue + 1] = G.P_CENTERS.j_chmb_butterfly
+        local numerator, denominator = SMODS.get_probability_vars(card, 1, card.ability.extra.odds, 'caterpillar')
+        return {
+            vars = {
+                card.ability.extra.mult,
+                numerator,
+                denominator
+            }
+        }
+    end,
+    calculate = function(self, card, context)
+        if context.joker_main then
+            return {
+                mult = card.ability.extra.mult
+            }
+        end
+        if context.end_of_round and not context.repetition and not context.individual and not context.blueprint then
+            if SMODS.pseudorandom_probability(card, 'caterpillar', 1, card.ability.extra.odds) then
+                G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+                    local new_card = SMODS.add_card { key = 'j_chmb_butterfly' }
+                    if new_card then
+                        new_card:juice_up(0.5, 0.5)
+                    end
+                    card:start_dissolve(nil, true)
+                    return true
+                end}))
+                card_eval_status_text(card, 'extra', nil, nil, nil, { message = 'Metamorphosis!', colour = G.C.GREEN })
+            end
+        end
+    end
+}
+
+SMODS.Joker {
+    key = 'butterfly',
+    loc_txt = {
+        name = 'Butterfly',
+        text = {
+            "{X:mult,C:white} X#1# {} Mult",
+            "{C:green,E:1,S:1.1}#2# in #3#{} chance to fly",
+            "away at end of round"
+        }
+    },
+    blueprint_compat = true,
+    config = { extra = { x_mult = 4, odds = 8 } },
+    rarity = 3,
+    atlas = 'Chumbalatro',
+    pos = { x = 3, y = 1},
+    cost = 8,
+    loc_vars = function(self, info_queue, card)
+        local numerator, denominator = SMODS.get_probability_vars(card, 1, card.ability.extra.odds, 'butterfly')
+        return {
+            vars = {
+                card.ability.extra.x_mult,
+                numerator,
+                denominator
+            }
+        }
+    end,
+    calculate = function(self, card, context)
+        if context.joker_main then
+            return {
+                xmult = card.ability.extra.x_mult
+            }
+        end
+        if context.end_of_round and not context.repetition and not context.individual and not context.blueprint then
+            if SMODS.pseudorandom_probability(card, 'butterfly', 1, card.ability.extra.odds) then
+                G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.3, func = function()
+                    card:start_dissolve()
+                    return true
+                end}))
+                card_eval_status_text(card, 'extra', nil, nil, nil, { message = 'Flew away!', colour = G.C.MULT })
+            else
+                card_eval_status_text(card, 'extra', nil, nil, nil, { message = localize('k_safe_ex'), colour = G.C.GREEN })
+            end
+        end
+    end
+}
+
+SMODS.Joker {
+    key = 'oekrep',
+    loc_txt = {
+        name = 'Oekrep',
+        text = {
+            "When leaving the {C:attention}shop{},",
+            "creates a {C:dark_edition}Negative{} copy",
+            "of a random other {C:attention}Joker"
+        }
+    },
+    blueprint_compat = false,
+    config = { extra = {} },
+    rarity = 4,
+    atlas = 'Chumbalatro',
+    pos = { x = 0, y = 1},
+    soul_pos = { x = 4, y = 1},
+    cost = 20,
+    calculate = function(self, card, context)
+        if context.ending_shop and not context.blueprint then
+            local jokers = {}
+            for i = 1, #G.jokers.cards do
+                local joker = G.jokers.cards[i]
+                if joker ~= card and joker.config.center.key ~= 'j_chmb_oekrep' then
+                    jokers[#jokers + 1] = joker
+                end
+            end
+            if #jokers > 0 then
+                G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.4, func = function()
+                    local chosen_joker = pseudorandom_element(jokers, pseudoseed('oekrep'))
+                    -- strip any edition off the copy before forcing Negative
+                    local copy = copy_card(chosen_joker, nil, nil, nil, true)
+                    copy:set_edition('e_negative', true)
+                    copy:add_to_deck()
+                    G.jokers:emplace(copy)
+                    card:juice_up(0.3, 0.5)
+                    return true
+                end}))
+                card_eval_status_text(card, 'extra', nil, nil, nil, { message = localize('k_duplicated_ex'), colour = G.C.DARK_EDITION })
+            end
+        end
+    end
+}
+
 -- Big/to_big/to_number/is_number only exist when Talisman is installed;
 -- fall back to plain numbers without it.
 function format_number(number, str)
@@ -307,6 +518,39 @@ function format_number(number, str)
 		return number
 	end
 	return tonumber(str:format(n))
+end
+
+-- Jokers whose numbers the base game recomputes every frame in Card:update
+-- (with no stored state behind them), so any buff is immediately overwritten.
+local derived_value_jokers = {
+    j_stencil = true,
+    j_swashbuckler = true,
+}
+
+-- True if Snowball's multiply_values would have a lasting effect on this joker:
+-- not frame-derived, and at least one nonzero value that multiply_values touches.
+function snowball_can_buff(joker)
+    if derived_value_jokers[joker.config.center.key] then return false end
+    local isnum = is_number or function(x) return type(x) == 'number' end
+    local function buffable(k, v, tbl)
+        if not isnum(v) or v == 0 then return false end
+        if k == "perish_tally" or k == "id" or k == "colour" or k == "suit_nominal"
+            or k == "base_nominal" or k == "face_nominal" or k == "qty"
+            or k == "selected_d6_face" or k == "card_limit" or k == "extra_slots_used"
+            or k == "dolls" then return false end
+        if k == "x_mult" and v == 1 and not tbl.override_x_mult_check then return false end
+        return true
+    end
+    for k, v in pairs(joker.ability) do
+        if type(v) == "table" and not isnum(v) then
+            for _k, _v in pairs(v) do
+                if buffable(_k, _v, v) then return true end
+            end
+        elseif buffable(k, v, joker.ability) then
+            return true
+        end
+    end
+    return false
 end
 
 function with_deck_effects(card, func)

@@ -30,6 +30,12 @@ There is no build or test command. To test changes, the mod must be present in B
 2. **Helpers**: `with_deck_effects`, `multiply_values`, `deep_copy`, `format_number` — used by Snowball to scale a neighboring joker's `ability` table. `multiply_values` deliberately skips non-value keys (`id`, `colour`, nominals, etc.); keep that exclusion list in mind if new ability fields misbehave.
 3. **Per-round state**: `SMODS.current_mod.reset_game_globals(run_start)` rerolls the "kissing cards" (two random distinct-rank cards from the deck) at run start and each round. Per-round mod state lives on `G.GAME.current_round.*` so it persists in saves; `loc_vars` must tolerate that state being absent (collection view has no run).
 
+## Designing new jokers
+
+- Check `.claude/docs/vanilla-joker-directory.md` first — a catalogue of all vanilla jokers plus this mod's, with a "covered design niches" section. New jokers must not duplicate an existing idea or theme. Vanilla source for deeper checks is in `balatro-src/` (jokers in `game.lua`, effect text in `localization/en-us.lua`).
+- Joker art is generated with `scripts/joker-art.sh [--face] [--no-atlas] <key> <col> <row> "<illustration description>"` — it calls Codex CLI's image generation, nearest-neighbor downscales to 71x95 (1x master, 2x is a pixel-doubled copy), and composites the sprite into both atlases at the given slot. Reruns reuse `.claude/art/<key>-raw.png`; delete it to force a fresh generation. `--face` generates a floating soul-face bust (transparent background) for legendary `soul_pos` slots instead of a card.
+- Art authority: `1x_art_template.png` / `2x_art_template.png` in the repo root (the base joker card). The JOKER side lettering is never AI-drawn — the script stamps the template's lettering pixels 1:1 after generation (off-white variant auto-selected on dark backdrops). Any generated character face must reuse the template jester's face shape/smile restyled (the vanilla Perkeo approach); the script enforces this via a face crop of the template passed as a reference image. Remaining constraints live in `.claude/docs/2026-08-06-joker-art-handoff.md`.
+
 ## Conventions
 
 - Joker keys are lowercase (`kissing`, `snowball`); Steamodded prefixes them to `j_chmb_<key>` automatically.
